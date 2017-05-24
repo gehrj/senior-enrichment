@@ -3,24 +3,48 @@ const debug = require('debug')('sql');
 const chalk = require('chalk');
 const Sequelize = require('sequelize');
 const pkg = require('../package.json');
-
 const name = process.env.DATABASE_NAME || pkg.name;
 const connectionString = process.env.DATABASE_connectionString || `postgres://localhost:5432/${pkg.name}`;
-
+const db = require('./_db.js');
+const student = require('./models/student');
+const campus = require('./models/campus');
+const Promise = require('bluebird');
 console.log(chalk.yellow(`Opening database connection to ${connectionString}`));
 
-// create the database instance that can be used in other database files
-const db = module.exports = new Sequelize(connectionString, {
-  logging: debug, // export DEBUG=sql in the environment to get SQL queries 
-  native: true    // lets Sequelize know we can use pg-native for ~30% more speed (if you have issues with pg-native feel free to take this out and work it back in later when we have time to help)
-});
 
 // run our models file (makes all associations for our Sequelize objects)
 require('./models')
 
+// **************** seed stuff ***************************
+
+let data = {
+    student: [
+        {name: 'Naruto', email: 'n@ninja.com', campus: {name: 'Leaf Village', mascot: 'Leaf' , city:'Tree' , state: 'CO' , phone:'123-456-7890'}},
+        {name: 'Sauske', email: 's@ninja.com', },
+        {name: 'Sakura', email: 'x@ninja.com', },
+        {name: 'Haku', email: 'h@ninja.com', },
+        {name: 'Gara', email: 'g@ninja.com', }
+    ],
+    campus: [
+        {name: 'Leaf Village', mascot: 'Leaf' , city:'Tree' , state: 'CO' , phone:'123-456-7890' },
+        {name: 'Hidden Mist', mascot: 'Water' , city:'Unknown' , state: 'MN' , phone:'123-456-7890' },
+        {name: 'Sand Village', mascot: 'Sand' , city:'Desert' , state: 'AZ' , phone:'123-456-7890' },
+        {name: 'Cloud Village', mascot: 'Cloud' , city:'Sky' , state: 'Toronto' , phone:'123-456-7890' },
+    ]
+}
+
 // sync the db, creating it if necessary
-function sync(force=false, retries=0, maxRetries=5) {
+function sync(force=true, retries=0, maxRetries=5) {
   return db.sync({force})
+    .then(function () {
+  console.log("Dropped old data, now inserting data");
+  return Promise.map(Object.keys(data), function (name) {
+    return Promise.map(data[name], function (item) {
+      return db.model(name)
+      .create(item);
+    });
+  });
+})
   .then(ok => console.log(`Synced models to db ${connectionString}`))
   .catch(fail => {
     // Don't do this auto-create nonsense in prod, or
